@@ -56,7 +56,7 @@ public class CommsCallback implements Runnable {
 	private ClientComms clientComms;
 	private Vector<MqttWireMessage> messageQueue;
 	private Vector<MqttToken> completeQueue;
-	
+
 	private enum State {STOPPED, RUNNING, QUIESCING};
 	private State current_state = State.STOPPED;
 	private State target_state = State.STOPPED;
@@ -64,7 +64,7 @@ public class CommsCallback implements Runnable {
 	private Thread callbackThread;
 	private String threadName;
 	private Future<?> callbackFuture;
-	
+
 	private Object workAvailable = new Object();
 	private Object spaceAvailable = new Object();
 	private ClientState clientState;
@@ -96,7 +96,7 @@ public class CommsCallback implements Runnable {
 				// For safety ensure any old events are cleared.
 				messageQueue.clear();
 				completeQueue.clear();
-				
+
 				target_state = State.RUNNING;
 				if (executorService == null) {
 					new Thread(this).start();
@@ -107,9 +107,9 @@ public class CommsCallback implements Runnable {
 		}
 		while (!isRunning()) {
 			try { Thread.sleep(100); } catch (Exception e) { }
-		}			
+		}
 	}
-	
+
 
 	/**
 	 * Stops the callback thread. 
@@ -117,7 +117,7 @@ public class CommsCallback implements Runnable {
 	 */
 	public void stop() {
 		final String methodName = "stop";
-		
+
 		synchronized (lifecycle) {
 			if (callbackFuture != null) {
 				callbackFuture.cancel(true);
@@ -160,10 +160,65 @@ public class CommsCallback implements Runnable {
 	}
 
 	public void run() {
+		/*
+		 * We added this thread due to the fact that the operation completion queue
+		 * and the incoming message queue were handled in the same thread. Unfortunately,
+		 * this can easily deadlock when you are publishing and receive an incoming message
+		 * at the same time. This thread allows these to run concurrently, avoiding said
+		 * deadlock.
+		 */
+		final Thread completeQueueThread =
+			new Thread()
+			{
+				@Override
+				public void run()
+				{
+					// Only allow the thread to live while we are running
+					while( isRunning() )
+					{
+						try
+						{
+							// Check for deliveryComplete callbacks...
+							MqttToken token = null;
+							synchronized( completeQueue )
+							{
+								if( !completeQueue.isEmpty() )
+								{
+									token = (MqttToken) completeQueue.elementAt( 0 );
+									completeQueue.removeElementAt( 0 );
+								}
+							}
+							if( null != token )
+							{
+								// Handle the delivery complete
+								handleActionComplete( token );
+							}
+							else
+							{
+								synchronized( workAvailable )
+								{
+									if( completeQueue.isEmpty() )
+									{
+										// Only wait if our work queue is empty
+										workAvailable.wait( 60 * 1000 );
+									}
+								}
+							}
+						}
+						catch( Exception ex )
+						{
+							ex.printStackTrace();
+						}
+					}
+				}
+			};
+		completeQueueThread.setDaemon( true );
+		completeQueueThread.start();
+
 		final String methodName = "run";
 		callbackThread = Thread.currentThread();
 		callbackThread.setName(threadName);
-		
+
 		synchronized (lifecycle) {
 			current_state = State.RUNNING;
 		}
@@ -173,8 +228,7 @@ public class CommsCallback implements Runnable {
 				// If no work is currently available, then wait until there is some...
 				try {
 					synchronized (workAvailable) {
-						if (isRunning() && messageQueue.isEmpty()
-								&& completeQueue.isEmpty()) {
+						if (running && messageQueue.isEmpty()) {
 							// @TRACE 704=wait for workAvailable
 							log.fine(CLASS_NAME, methodName, "704");
 							workAvailable.wait();
@@ -184,19 +238,19 @@ public class CommsCallback implements Runnable {
 				}
 
 				if (isRunning()) {
-					// Check for deliveryComplete callbacks...
-					MqttToken token = null;
-					synchronized (completeQueue) {
-					    if (!completeQueue.isEmpty()) {
-						    // First call the delivery arrived callback if needed
-						    token = (MqttToken) completeQueue.elementAt(0);
-						    completeQueue.removeElementAt(0);
-					    }
-					}
-					if (null != token) {
-						handleActionComplete(token);
-					}
-					
+//					// Check for deliveryComplete callbacks...
+//					MqttToken token = null;
+//					synchronized (completeQueue) {
+//					    if (!completeQueue.isEmpty()) {
+//						    // First call the delivery arrived callback if needed
+//						    token = (MqttToken) completeQueue.elementAt(0);
+//						    completeQueue.removeElementAt(0);
+//					    }
+//					}
+//					if (null != token) {
+//						handleActionComplete(token);
+//					}
+
 					// Check for messageArrived callbacks...
 					MqttPublish message = null;
 					synchronized (messageQueue) {
@@ -446,9 +500,9 @@ public class CommsCallback implements Runnable {
 		final String methodName = "asyncOperationComplete";
 
 		if (isRunning()) {
-			// invoke callbacks on callback thread
-			completeQueue.addElement(token);
 			synchronized (workAvailable) {
+			    // invoke callbacks on callback thread
+			    completeQueue.addElement(token);
 				// @TRACE 715=new workAvailable. key={0}
 				log.fine(CLASS_NAME, methodName, "715", new Object[] { token.internalTok.getKey() });
 				workAvailable.notifyAll();
@@ -516,7 +570,7 @@ public class CommsCallback implements Runnable {
 		
 		return delivered;
 	}
-	
+
 	public boolean isRunning() {
 		boolean result;
 		synchronized (lifecycle) {
@@ -525,7 +579,7 @@ public class CommsCallback implements Runnable {
 		}
 		return result;
 	}
-	
+
 	public boolean isQuiescing() {
 		boolean result;
 		synchronized (lifecycle) {

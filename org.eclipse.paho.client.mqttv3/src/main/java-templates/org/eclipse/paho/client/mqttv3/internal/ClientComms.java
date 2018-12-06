@@ -242,7 +242,7 @@ public class ClientComms {
 				}
 
 				conState = CLOSED;
-				// Don't shut down an externally supplied executor service 
+				// Don't shut down an externally supplied executor service
 				//shutdownExecutorService();
 				// ShutdownConnection has already cleaned most things
 				clientState.close();
@@ -425,18 +425,22 @@ public class ClientComms {
 			stoppingComms = false;
 		}
 
+		// Make sure the callback doesn't change in the next
+		// couple of checks.
+		final CommsCallback currentCallback = callback;
+
 		// Internal disconnect processing has completed.  If there
 		// is a disconnect token or a connect in error notify
 		// it now. This is done at the end to allow a new connect
 		// to be processed and now throw a currently disconnecting error.
 		// any outstanding tokens and unblock any waiters
 		if (endToken != null && callback != null) {
-			callback.asyncOperationComplete(endToken);
+			currentCallback.asyncOperationComplete(endToken);
 		}
 
-		if (wasConnected && callback != null) {
+		if (wasConnected && currentCallback != null) {
 			// Let the user know client has disconnected either normally or abnormally
-			callback.connectionLost(reason);
+			currentCallback.connectionLost(reason);
 		}
 
 		// While disconnecting, close may have been requested - try it now
@@ -777,7 +781,7 @@ public class ClientComms {
 				internalSend(disconnect, token);
 				// do not wait if the sender process is not running
 				if (sender != null && sender.isRunning()) {
-					token.internalTok.waitUntilSent();
+					token.internalTok.waitUntilSent( 30 * 1000 );
 				}
 			}
 			catch (MqttException ex) {
@@ -785,7 +789,7 @@ public class ClientComms {
 			finally {
 				token.internalTok.markComplete(null, null);
 				if (sender == null || !sender.isRunning()) {
-					// if the sender process is not running 
+					// if the sender process is not running
 					token.internalTok.notifyComplete();
 				}
 				shutdownConnection(token, null);
@@ -901,7 +905,7 @@ public class ClientComms {
 				//@TRACE 510=Publishing Buffered message message={0}
 				log.fine(CLASS_NAME, methodName, "510", new Object[] {bufferedMessage.getMessage().getKey()});
 				internalSend(bufferedMessage.getMessage(), bufferedMessage.getToken());
-				
+
 				// Delete from persistence if in there
 				clientState.unPersistBufferedMessage(bufferedMessage.getMessage());
 			} else {
