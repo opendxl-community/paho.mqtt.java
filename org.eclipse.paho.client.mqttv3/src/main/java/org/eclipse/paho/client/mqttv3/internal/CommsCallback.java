@@ -228,7 +228,7 @@ public class CommsCallback implements Runnable {
 				// If no work is currently available, then wait until there is some...
 				try {
 					synchronized (workAvailable) {
-						if (running && messageQueue.isEmpty()) {
+						if (isRunning() && messageQueue.isEmpty()) {
 							// @TRACE 704=wait for workAvailable
 							log.fine(CLASS_NAME, methodName, "704");
 							workAvailable.wait();
