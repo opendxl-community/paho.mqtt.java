@@ -481,10 +481,14 @@ public class BasicTest {
     int after_count = Thread.activeCount();
     Thread[] tarray = new Thread[after_count];
     after_count = Thread.enumerate(tarray);
+    int extraThreads = 0;
     for (int i = 0; i < after_count; ++i) {
       log.info(i + " " + tarray[i].getName());
+      if(tarray[i].getName().startsWith("completeQueueThread")) {
+        extraThreads++;
+      }
     }
-    Assert.assertEquals(after_count, before_thread_count + pool_size);
+    Assert.assertEquals(after_count, before_thread_count + pool_size + extraThreads);
   }
 
 
