@@ -160,6 +160,14 @@ public class CommsCallback implements Runnable {
 	}
 
 	public void run() {
+        final String methodName = "run";
+		callbackThread = Thread.currentThread();
+		callbackThread.setName(threadName);
+
+		synchronized (lifecycle) {
+			current_state = State.RUNNING;
+		}
+        
 		/*
 		 * We added this thread due to the fact that the operation completion queue
 		 * and the incoming message queue were handled in the same thread. Unfortunately,
@@ -168,7 +176,7 @@ public class CommsCallback implements Runnable {
 		 * deadlock.
 		 */
 		final Thread completeQueueThread =
-			new Thread()
+			new Thread("completeQueueThread-" + this.threadName)
 			{
 				@Override
 				public void run()
@@ -207,21 +215,13 @@ public class CommsCallback implements Runnable {
 						}
 						catch( Exception ex )
 						{
-							ex.printStackTrace();
+							ex.printStackTrace(); // TODO handle this better?
 						}
 					}
 				}
 			};
 		completeQueueThread.setDaemon( true );
 		completeQueueThread.start();
-
-		final String methodName = "run";
-		callbackThread = Thread.currentThread();
-		callbackThread.setName(threadName);
-
-		synchronized (lifecycle) {
-			current_state = State.RUNNING;
-		}
 
 		while (isRunning()) {
 			try {
