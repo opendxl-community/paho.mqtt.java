@@ -72,7 +72,7 @@ public class TCPNetworkModule implements NetworkModule {
 			SocketAddress sockaddr = new InetSocketAddress(host, port);
 			socket = factory.createSocket();
 			socket.connect(sockaddr, conTimeout*1000);
-			socket.setSoTimeout(1000);
+//			socket.setSoTimeout(1000); temporarily removing due to it causing read timed out issues
 		}
 		catch (ConnectException ex) {
 			//@TRACE 250=Failed to create TCP socket
