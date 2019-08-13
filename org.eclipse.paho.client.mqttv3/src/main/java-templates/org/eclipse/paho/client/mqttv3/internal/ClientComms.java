@@ -339,7 +339,7 @@ public class ClientComms {
 	 * @param token the {@link MqttToken} To track closing the connection
 	 * @param reason the {@link MqttException} thrown requiring the connection to be shut down.
 	 */
-	public void shutdownConnection(MqttToken token, final MqttException reason) {
+	public void shutdownConnection(MqttToken token, MqttException reason) {
 		final String methodName = "shutdownConnection";
 		boolean wasConnected;
 		MqttToken endToken = null; 		//Token to notify after disconnect completes
@@ -440,13 +440,7 @@ public class ClientComms {
 
 		if (wasConnected && currentCallback != null) {
 			// Let the user know client has disconnected either normally or abnormally
-			Thread t = new Thread() {// OpenDXL
-				@Override
-				public void run() {
-					currentCallback.connectionLost(reason);
-				}
-			};
-			t.start(); // OpenDXL
+			currentCallback.connectionLost(reason); // OpenDXL
 		}
 
 		// While disconnecting, close may have been requested - try it now

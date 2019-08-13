@@ -346,7 +346,7 @@ public class CommsCallback implements Runnable {
 	 * 
 	 * @param cause  the reason behind the loss of connection.
 	 */
-	public void connectionLost(MqttException cause) {
+	public void connectionLost(final MqttException cause) {
 		final String methodName = "connectionLost";
 		// If there was a problem and a client callback has been set inform
 		// the connection lost listener of the problem.
@@ -354,7 +354,17 @@ public class CommsCallback implements Runnable {
 			if (mqttCallback != null && cause != null) {
 				// @TRACE 708=call connectionLost
 				log.fine(CLASS_NAME, methodName, "708", new Object[] { cause });
-				mqttCallback.connectionLost(cause);
+				// OpenDXL - Run the connectionLost callback on a separate thread in order to avoid the case
+				// where the thread calling shutdownConnection has its own shutdown method called which
+				// was causing the thread to be marked as "interrupted" and would lead to InterruptedExceptions
+				// when mqttCallback.connectionLost() did any network operations.
+				Thread connectionLostCallbackThread = new Thread() {
+					@Override
+					public void run() {
+						mqttCallback.connectionLost(cause);
+					}
+				};
+				connectionLostCallbackThread.start();
 			}
 			if(reconnectInternalCallback != null && cause != null){
 				reconnectInternalCallback.connectionLost(cause);
